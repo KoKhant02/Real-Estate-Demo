@@ -1,52 +1,53 @@
-import { DollarSign, Home, MapPin } from 'lucide-react';
-import React from 'react';
-import type { Block } from './components/RealEstateMap';
-import { RealEstateMap } from './components/RealEstateMap';
+import { useEffect, useState } from 'react';
+import { SVGImporter } from './components/SVGImporter';
+import { UniversalMap } from './components/UniversalMap';
 import * as ENV from './env';
+import type { CityMapConfig, svgToMapConfig, WardMapConfig } from './utils/svgParser';
 
 export default function App() {
-  const getInitialBlocks = (): Block[] => {
-    const customBlocks: Block[] = [];
-    let blockNumber = 1;
-    
-    for (let row = 0; row < ENV.GRID_ROWS; row++) {
-      for (let col = 0; col < ENV.GRID_COLS; col++) {
-        customBlocks.push({
-          id: `Block-${row * ENV.GRID_COLS + col + 1}`,
-          status: Math.random() > (1 - ENV.INITIAL_SOLD_PROBABILITY) ? 'purchased' : 'available',
-          row,
-          col,
-          price: ENV.MIN_BLOCK_PRICE + Math.floor(Math.random() * (ENV.MAX_BLOCK_PRICE - ENV.MIN_BLOCK_PRICE)),
-          name: `Lot ${blockNumber}`,
-          number: blockNumber++
-        });
+  const [mapConfig, setMapConfig] = useState<WardMapConfig | CityMapConfig | null>(null);
+  const [selectedEstateId, setSelectedEstateId] = useState<string | null>(null);
+  const [purchasedEstates, setPurchasedEstates] = useState<Set<string>>(new Set());
+
+  // Load default SVG on mount if available
+  useEffect(() => {
+    if (ENV.DEFAULT_WARD_SVG && !mapConfig) {
+      try {
+        const config = svgToMapConfig(ENV.DEFAULT_WARD_SVG);
+        setMapConfig(config);
+      } catch (err) {
+        console.error('Failed to load default SVG:', err);
       }
     }
-    return customBlocks;
+  }, []);
+
+  const handleSVGImport = (config: WardMapConfig | CityMapConfig) => {
+    setMapConfig(config);
+    setSelectedEstateId(null);
   };
 
-  const [blocks, setBlocks] = React.useState<Block[]>(getInitialBlocks());
-  const [selectedBlockInfo, setSelectedBlockInfo] = React.useState<Block | null>(null);
-
-  const handlePurchase = (blockId: string, block: Block) => {
-    setBlocks(prevBlocks => 
-      prevBlocks.map(b => 
-        b.id === blockId ? { ...b, status: 'purchased' } : b
-      )
-    );
+  const handleEstateClick = (shapeId: string) => {
+    console.log('Estate clicked:', shapeId);
+    setSelectedEstateId(shapeId);
   };
 
-  const handleBlockSelect = (blockId: string | null, block: Block | null) => {
-    setSelectedBlockInfo(block);
+  const handleWardClick = (wardId: string) => {
+    console.log('Ward clicked:', wardId);
+    // TODO: Load ward detail view when city view is implemented
+    alert(`Clicked ward: ${wardId}\n\nIn the future, this will zoom into the ward detail view!`);
   };
 
-  const availableCount = blocks.filter(b => b.status === 'available').length;
-  const purchasedCount = blocks.filter(b => b.status === 'purchased').length;
-  const totalBlocks = blocks.length;
-  
-  const averagePrice = blocks
-    .filter(b => b.status === 'available' && b.price)
-    .reduce((sum, b) => sum + (b.price || 0), 0) / availableCount || 0;
+  const handlePurchase = () => {
+    if (selectedEstateId) {
+      setPurchasedEstates(prev => new Set([...prev, selectedEstateId]));
+      setSelectedEstateId(null);
+    }
+  };
+
+  const selectedEstate = ENV.ESTATES.find(e => e.shapeId === selectedEstateId);
+  const availableEstates = ENV.ESTATES.filter(e => 
+    e.status === 'available' && !purchasedEstates.has(e.shapeId)
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
@@ -54,15 +55,13 @@ export default function App() {
       <header className="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Home className="w-8 h-8 text-yellow-400" />
-              <div>
-                <h1 className="text-3xl">{ENV.PROJECT_NAME}</h1>
-                <p className="text-slate-400 text-sm">{ENV.PROJECT_TAGLINE}</p>
-              </div>
+            <div>
+              <h1 className="text-3xl">{ENV.PROJECT_NAME}</h1>
+              <p className="text-slate-400 text-sm mt-1">
+                {mapConfig?.type === 'city' ? 'City View' : 'Ward View'} - Universal SVG Map System
+              </p>
             </div>
-            <div className="flex items-center gap-2 bg-green-600 px-6 py-3 rounded-lg">
-              <MapPin className="w-5 h-5" />
+            <div className="bg-green-600 px-6 py-3 rounded-lg">
               <span>{ENV.PROJECT_LOCATION}</span>
             </div>
           </div>
@@ -70,164 +69,185 @@ export default function App() {
       </header>
 
       <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">
-        {/* Statistics Dashboard */}
-        <div className="grid md:grid-cols-4 gap-6">
-          <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <Home className="w-6 h-6" />
-              </div>
-              <span className="text-yellow-100">Available Lots</span>
-            </div>
-            <p className="text-4xl">{availableCount}</p>
-          </div>
+        {/* SVG Importer */}
+        <SVGImporter 
+          onImport={handleSVGImport}
+          defaultSVG={ENV.DEFAULT_WARD_SVG}
+        />
 
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <Home className="w-6 h-6" />
+        {/* Map Display */}
+        {mapConfig ? (
+          <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl">
+                  {mapConfig.type === 'city' ? '🏙️ City Map' : '🏘️ Ward Map'}
+                </h2>
+                <p className="text-slate-400 text-sm mt-1">
+                  {mapConfig.width} × {mapConfig.height} units • 
+                  {mapConfig.type === 'city' 
+                    ? ` ${(mapConfig as CityMapConfig).wards.length} wards`
+                    : ` ${ENV.ESTATES.length} estates configured`
+                  }
+                </p>
               </div>
-              <span className="text-blue-100">Sold Lots</span>
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-yellow-400"></div>
+                  <span className="text-slate-300">Available</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-blue-500"></div>
+                  <span className="text-slate-300">Purchased</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-green-500"></div>
+                  <span className="text-slate-300">Selected</span>
+                </div>
+              </div>
             </div>
-            <p className="text-4xl">{purchasedCount}</p>
-          </div>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6" />
-              </div>
-              <span className="text-purple-100">Average Price</span>
-            </div>
-            <p className="text-3xl">${(averagePrice / 1000).toFixed(0)}K</p>
-          </div>
+            {/* Universal Map Component */}
+            <UniversalMap
+              config={mapConfig}
+              estates={ENV.ESTATES}
+              purchasedEstateIds={purchasedEstates}
+              selectedEstateId={selectedEstateId}
+              onEstateClick={handleEstateClick}
+              onWardClick={handleWardClick}
+              enableZoom={ENV.ENABLE_ZOOM}
+              enablePan={ENV.ENABLE_PAN}
+              showGrid={ENV.SHOW_COORDINATE_GRID}
+            />
 
-          <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl shadow-xl">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <MapPin className="w-6 h-6" />
-              </div>
-              <span className="text-green-100">Total Lots</span>
+            {/* Map Info */}
+            <div className="mt-4 text-sm text-slate-400">
+              {mapConfig.type === 'ward' ? (
+                <>
+                  <p>
+                    <strong>Ward Boundary:</strong> Auto-extracted from SVG • 
+                    <strong className="ml-2">Roads/Paths:</strong> {(mapConfig as WardMapConfig).roads.length} detected • 
+                    <strong className="ml-2">Buildings:</strong> {(mapConfig as WardMapConfig).buildings.length} shapes •
+                    <strong className="ml-2 text-yellow-400">Estates:</strong> {ENV.ESTATES.length} configured
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    <strong>City View:</strong> {(mapConfig as CityMapConfig).wards.length} wards • 
+                    Click any ward to zoom into ward detail view
+                  </p>
+                </>
+              )}
             </div>
-            <p className="text-4xl">{totalBlocks}</p>
+          </div>
+        ) : (
+          <div className="bg-slate-800/50 backdrop-blur-sm p-12 rounded-xl border border-slate-700 text-center">
+            <p className="text-slate-400 text-lg">
+              👆 Paste your SVG code above to generate the map
+            </p>
+          </div>
+        )}
+
+        {/* Estate Selection Panel */}
+        {selectedEstate && (
+          <div className="bg-gradient-to-r from-green-600/20 to-blue-600/20 backdrop-blur-sm p-6 rounded-xl border border-green-500/30">
+            <h3 className="text-xl mb-4">Selected Estate</h3>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <p><strong>Lot Number:</strong> {selectedEstate.lotNumber}</p>
+                <p><strong>Area:</strong> {selectedEstate.area} sq m</p>
+                <p><strong>Price:</strong> ${selectedEstate.price.toLocaleString()}</p>
+                {selectedEstate.streetFacing && (
+                  <p><strong>Street Facing:</strong> {selectedEstate.streetFacing}</p>
+                )}
+              </div>
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={handlePurchase}
+                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg transition-colors"
+                >
+                  Purchase Estate
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-6">
+          <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
+            <div className="text-3xl text-blue-400">{ENV.ESTATES.length}</div>
+            <div className="text-sm text-slate-400 mt-1">Total Estates</div>
+          </div>
+          <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
+            <div className="text-3xl text-yellow-400">{availableEstates.length}</div>
+            <div className="text-sm text-slate-400 mt-1">Available</div>
+          </div>
+          <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
+            <div className="text-3xl text-green-400">{purchasedEstates.size}</div>
+            <div className="text-sm text-slate-400 mt-1">Purchased</div>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Map Section */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl">Development Master Plan</h2>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-yellow-400 rounded"></div>
-                    <span className="text-slate-300">Available</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                    <span className="text-slate-300">Sold</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-slate-600 rounded"></div>
-                    <span className="text-slate-300">Road</span>
-                  </div>
-                </div>
-              </div>
-
-              <RealEstateMap
-                rows={ENV.GRID_ROWS}
-                cols={ENV.GRID_COLS}
-                blocks={blocks}
-                onPurchase={handlePurchase}
-                onBlockSelect={handleBlockSelect}
-                availableColor={ENV.AVAILABLE_BLOCK_COLOR}
-                purchasedColor={ENV.PURCHASED_BLOCK_COLOR}
-                showPurchasePanel={ENV.SHOW_PURCHASE_PANEL}
-                blockGap={ENV.BLOCK_GAP}
-                blockBorderRadius={ENV.BLOCK_BORDER_RADIUS}
-                horizontalRoadInterval={ENV.HORIZONTAL_BLOCKS_BEFORE_ROAD}
-                verticalRoadInterval={ENV.VERTICAL_BLOCKS_BEFORE_ROAD}
-                roadColor={ENV.ROAD_COLOR}
-                showBlockNumbers={ENV.SHOW_BLOCK_NUMBERS}
-              />
+        {/* System Info */}
+        <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
+          <h3 className="text-xl mb-4">🎉 Universal SVG Map System Active!</h3>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-sm uppercase tracking-wider text-slate-400 mb-3">✨ Features</h4>
+              <ul className="space-y-2 text-sm text-slate-300">
+                <li>✓ <strong>Auto-parse SVG</strong> - Paste code, instant map</li>
+                <li>✓ <strong>Auto-detect</strong> - City or ward view</li>
+                <li>✓ <strong>X/Y coordinates</strong> - True coordinate system</li>
+                <li>✓ <strong>Universal</strong> - Works for any SVG</li>
+                <li>✓ <strong>Multi-level</strong> - City → Ward → Estate</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-sm uppercase tracking-wider text-slate-400 mb-3">📝 How to Edit</h4>
+              <ul className="space-y-2 text-sm text-slate-300">
+                <li>1. Open <code className="bg-slate-700 px-2 py-1 rounded text-blue-400">/env.ts</code></li>
+                <li>2. Paste your SVG in <code className="bg-slate-700 px-2 py-1 rounded text-green-400">DEFAULT_WARD_SVG</code></li>
+                <li>3. Add <code className="bg-slate-700 px-2 py-1 rounded text-yellow-400">data-id</code> attributes to estate paths</li>
+                <li>4. Configure estates in <code className="bg-slate-700 px-2 py-1 rounded text-purple-400">ESTATES</code> array</li>
+                <li>5. Done! Map updates automatically ✨</li>
+              </ul>
             </div>
           </div>
+          
+          <div className="mt-6 bg-blue-600/20 border border-blue-500/30 rounded-lg p-4">
+            <p className="text-sm text-blue-200">
+              <strong>💡 Pro Tip:</strong> In your SVG, use <code className="bg-slate-700 px-2 py-1 rounded mx-1">data-id="estate-01"</code> 
+              to identify purchasable estates. The first path is always the ward boundary!
+            </p>
+          </div>
+        </div>
 
-          {/* Info Sidebar */}
-          <div className="space-y-4">
-            {/* Selected Lot Info */}
-            {selectedBlockInfo ? (
-              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700 space-y-4">
-                <h3 className="text-xl border-b border-slate-600 pb-3">Selected Property</h3>
-                
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-slate-400 text-sm">Lot Number</p>
-                    <p className="text-2xl">{selectedBlockInfo.number}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-slate-400 text-sm">Status</p>
-                    <span className={`inline-block px-3 py-1 rounded-full text-sm ${
-                      selectedBlockInfo.status === 'available' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-blue-500/20 text-blue-400'
-                    }`}>
-                      {selectedBlockInfo.status === 'available' ? 'Available' : 'Sold'}
-                    </span>
-                  </div>
-
-                  {selectedBlockInfo.price && (
-                    <div>
-                      <p className="text-slate-400 text-sm">Price</p>
-                      <p className="text-3xl text-yellow-400">${selectedBlockInfo.price.toLocaleString()}</p>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-slate-400 text-sm">Location</p>
-                    <p>Row {selectedBlockInfo.row + 1}, Col {selectedBlockInfo.col + 1}</p>
-                  </div>
-
-                  <div className="pt-2 space-y-2 text-sm text-slate-300">
-                    <p>✓ Water & Electricity Ready</p>
-                    <p>✓ Paved Road Access</p>
-                    <p>✓ 30-Year Title Deed</p>
-                    <p>✓ Building Permit Available</p>
-                  </div>
-                </div>
-
-                {selectedBlockInfo.status === 'available' && (
-                  <button
-                    onClick={() => handlePurchase(selectedBlockInfo.id, selectedBlockInfo)}
-                    className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white py-4 rounded-lg transition-all font-semibold text-lg shadow-lg"
-                  >
-                    Purchase Lot
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-xl border border-slate-700">
-                <h3 className="text-xl border-b border-slate-600 pb-3 mb-4">Property Details</h3>
-                <p className="text-slate-400 text-center py-8">
-                  Click on any available lot to view details
-                </p>
-              </div>
-            )}
-
+        {/* Next Steps */}
+        <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 backdrop-blur-sm p-6 rounded-xl border border-purple-500/30">
+          <h3 className="text-xl mb-3">📋 Next Steps</h3>
+          <div className="grid md:grid-cols-2 gap-4 text-sm text-slate-300">
+            <div>
+              <p className="mb-2"><strong>For Current Ward View:</strong></p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Add estate configurations in env.ts</li>
+                <li>Match shapeId to SVG shape IDs</li>
+                <li>Set prices, lot numbers, status</li>
+              </ul>
+            </div>
+            <div>
+              <p className="mb-2"><strong>For Future City View:</strong></p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Create city SVG with multiple ward paths</li>
+                <li>Paste in SVG Importer</li>
+                <li>System auto-detects as city view!</li>
+                <li>Click ward → Loads ward detail SVG</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="bg-slate-800/50 backdrop-blur-sm border-t border-slate-700 mt-12">
-        <div className="max-w-7xl mx-auto px-8 py-6 text-center text-slate-400 text-sm">
-          <p>© {ENV.PROJECT_YEAR} {ENV.PROJECT_NAME}. All rights reserved.</p>
-          <p className="mt-2">Contact: {ENV.CONTACT_EMAIL} | {ENV.CONTACT_PHONE}</p>
-        </div>
-      </footer>
     </div>
   );
 }
