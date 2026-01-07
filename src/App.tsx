@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SVGImporter } from './components/SVGImporter';
 import { UniversalMap } from './components/UniversalMap';
-import { WardMapConfig, CityMapConfig, svgToMapConfig } from './utils/svgParser';
 import * as ENV from './env';
+import type { CityMapConfig, WardMapConfig } from './utils/svgParser';
+import { svgToMapConfig } from './utils/svgParser';
 
 export default function App() {
   const [mapConfig, setMapConfig] = useState<WardMapConfig | CityMapConfig | null>(null);
