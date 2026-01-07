@@ -1,13 +1,32 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SVGImporter } from './components/SVGImporter';
 import { UniversalMap } from './components/UniversalMap';
+import { WardMapConfig, CityMapConfig, svgToMapConfig } from './utils/svgParser';
 import * as ENV from './env';
-import type { CityMapConfig, svgToMapConfig, WardMapConfig } from './utils/svgParser';
 
 export default function App() {
   const [mapConfig, setMapConfig] = useState<WardMapConfig | CityMapConfig | null>(null);
   const [selectedEstateId, setSelectedEstateId] = useState<string | null>(null);
   const [purchasedEstates, setPurchasedEstates] = useState<Set<string>>(new Set());
+
+  // Load purchased estates from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('purchasedEstates');
+    if (saved) {
+      try {
+        setPurchasedEstates(new Set(JSON.parse(saved)));
+      } catch (err) {
+        console.error('Failed to load saved data:', err);
+      }
+    }
+  }, []);
+
+  // Save purchased estates to localStorage
+  useEffect(() => {
+    if (purchasedEstates.size > 0) {
+      localStorage.setItem('purchasedEstates', JSON.stringify([...purchasedEstates]));
+    }
+  }, [purchasedEstates]);
 
   // Load default SVG on mount if available
   useEffect(() => {
@@ -64,6 +83,17 @@ export default function App() {
             <div className="bg-green-600 px-6 py-3 rounded-lg">
               <span>{ENV.PROJECT_LOCATION}</span>
             </div>
+            <button
+              onClick={() => {
+                if (confirm('Reset all purchased estates? This cannot be undone.')) {
+                  setPurchasedEstates(new Set());
+                  localStorage.removeItem('purchasedEstates');
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition-colors"
+            >
+              Clear All Data
+            </button>
           </div>
         </div>
       </header>
